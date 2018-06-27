@@ -1,0 +1,26 @@
+---
+title: "MLB evolution"
+author: "Bernat Plandolit López"
+date: "June 27, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Objective
+
+The NYY are the favourites to win this season major league beacause of their management and strategic purchases of players. They did a similar thing on 2009. The objective of the study is to compare the performance of that year with the current one, and evaluate the competing teams. 
+
+## Data set
+
+We have a vast number of tables information of all the teams from the MLB and all years 
+
+## Source of information
+
+http://www.espn.com/mlb/team/stats/batting/_/name/nyy/new-york-yankees
+
+http://www.espn.com/mlb/team/stats/batting/_/name/nyy
+
+http://www.espn.com/mlb/team/stats/batting/_/name/nyy/year/2009
