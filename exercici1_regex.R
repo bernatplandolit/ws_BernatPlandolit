@@ -1,3 +1,4 @@
+library(stringr)
 
 # Exercice 1 --------------------------------------------------------------
 
@@ -10,4 +11,6 @@ grepl(my_pattern, text1)
 
 data <- read.csv2("LipidData.csv")
 
-carbons <- grep()
+vars <- as.character(data$LIPID)
+
+carbons <- str_split(vars, "C*[:digit:]{2,}[[:punct:][:alpha:]]")
