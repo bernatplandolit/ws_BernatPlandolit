@@ -1,0 +1,308 @@
+---
+title: "MLB Study from the web"
+author: "Bernat Plandolit López"
+date: "6/7/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The Major League of Baseball (MLB) has always been historically a focus of applied statistics. There is a vast number of variables to take into account and places to find it. For instance, the web. The main objective of this study is to obtain data from the official MLB web which contains information in a JSON structure.
+
+The data downloaded consists on the performance of the New York Yankees (NYY) during the years ranging from 1996 to 2009, when they won their last championship.Then, some simple analysis are shown. 
+
+We will make use of the following packages:
+
+```{r packages, message=FALSE, warning=FALSE}
+library(rjson)
+library(tidyverse)
+library(stringr)
+```
+
+The tidiverse contains a very large number of packages, such as `stringr`, showed explicitly.
+
+## Getting data from the web
+
+We will get the data from the JSON structure stored in the web page. We show the next code to obtain it.
+
+```{r web_scraping}
+years <- c(1996:2009, 2018)
+win_years <- c(1996, 1998:2000, 2009)
+urls <- rep(NA, length(years))
+for(i in seq_along(years)){
+  urls[i] <- paste0("http://mlb.mlb.com/pubajax/wf/flow/stats.splayer?season=", years[i],"&sort_order=%27desc%27&sort_column=%27avg%27&stat_type=hitting&page_type=SortablePlayer&team_id=147&game_type=%27R%27&player_pool=ALL&season_type=ANY&sport_code=%27mlb%27&results=1000&recSP=1&recPP=50")
+}
+
+data = list()
+for(i in seq_along(years)){
+  data[[i]] <- fromJSON(file = urls[i])
+}
+
+for(i in seq_along(years)){
+  dt <- data[[i]]$stats_sortable_player$queryResults$row
+  players <- length(dt)
+  vars <- names(as.data.frame(dt[[1]]))
+  df <- data.frame(matrix(unlist(dt), nrow=players, byrow=T), 
+                   stringsAsFactors=FALSE)
+  names(df) <- vars
+  df$year <- years[i]
+  if(years[i] %in% win_years) df$win <- 1
+  else df$win <- 0
+  assign(paste0("data_", years[i]), df)
+}
+
+data_tot <- rbind(data_1996, data_1997, data_1998, data_1999,
+                  data_2000, data_2001,data_2001, data_2002,
+                  data_2003, data_2004, data_2005, data_2006, 
+                  data_2007, data_2008, data_2009)
+```
+
+We can save it in order to have access to data even if the web changes any characteristic and the code is no longer useful.
+
+```{r save_data, eval=FALSE}
+save(data_1998, data_1999, data_2000, data_2001,
+     data_2001, data_2002, data_2003, data_2004,
+     data_2005, data_2006, data_2007, data_2008,
+     data_2009, data_tot, data_2018, file = "mlb_stats.RData")
+```
+
+Now that we have the raw data obtained from the web in the structure of `data.frame` (or `tibble`), we can clean it to get the formats and variables that are of our interest. We can also create new variables to try to explain some characteristics, such as the variable `potential_points` that we present
+
+```{r data_cleaning}
+## Variables in the table
+
+selection <- c(4, 6, 41, 52, 50, 46, 42, 48, 34, 37, 12, 18, 26, 24,
+               13, 47,14, 15, 31, 16, 2, 20, 9, 40, 35, 44, 55, 56)
+
+dades_netes <- data_tot %>%
+  select(selection)
+
+## Rare data
+
+# Turn to numeric strings of the form ".___"
+
+for(i in 15:18){
+  dades_netes[[i]] <- str_c("0", str_extract(dades_netes[[i]], ".\\d{3}"))
+}
+
+for(i in 3:28){
+  dades_netes[[i]] <- as.numeric(dades_netes[[i]])
+}
+
+# Turn to factor some character variables
+
+dades_netes[[2]] <- as.factor(dades_netes[[2]])
+
+## Useful variables (names)
+
+## Create any variable of interest
+
+dades_netes <- dades_netes %>%
+  mutate(potential_points = (1/4*h + 2/4*d + 3/4*t + hr + rbi
+         + 1/4*bb - so + sb - cs)/ab)
+
+# 2018 data
+## Variables in the table
+
+dades_netes_18 <- data_2018 %>%
+  select(selection)
+
+## Rare data
+
+# Turn to numeric strings of the form ".___"
+
+for(i in 15:18){
+  dades_netes_18[[i]] <- str_c("0", str_extract(dades_netes_18[[i]], ".\\d{3}"))
+}
+
+for(i in 3:28){
+  dades_netes_18[[i]] <- as.numeric(dades_netes_18[[i]])
+}
+
+# Turn to factor some character variables
+
+dades_netes_18[[2]] <- as.factor(dades_netes_18[[2]])
+
+## Create any variable of interest
+
+dades_netes_18 <- dades_netes_18 %>%
+  mutate(potential_points = (1/4*h + 2/4*d + 3/4*t + hr + rbi
+         + 1/4*bb - so + sb - cs)/ab)
+```
+
+
+## Analysis
+
+Now that we have the data we are going to perform some simple analysis to try to see differences between performances of the team in winning years and in losing years. The analysis is focused in the offensive-hitting part of the game.
+
+First, we present how can we can see som characteristics as the probability of winning one, two or three bases and doing homerun of a player during the years he played in the team.
+
+```{r}
+player <- "Derek Jeter"
+selected_vars <- c("year", "h", "d", "t", "hr")
+
+dades_netes %>%
+  filter(name_display_first_last == player) %>%
+  select(selected_vars, "ab") %>%
+  mutate(h = h/ab, d = d/ab, t = t/ab, hr = hr/ab) %>%
+  gather(hit, val, h, d, t, hr) %>%
+  ggplot() + 
+  geom_bar(mapping = aes(x = hit, y = val, fill = hit),
+           stat = "identity", position = "dodge") + 
+  facet_grid(. ~ year) +
+  labs(title = paste("Evolution of ", player, sep = ""),
+       subtitle = paste("Variables: ", str_c(selected_vars[-1], 
+                                             collapse = ", ")),
+       x = "Type of hit", 
+       y = "Probability",
+       color = '')
+```
+
+We can perform the same anaysis using the whole team grouped by positions. We can substract the positions P (pitcher) and C (catcher) as they do not affect very much to these variables.
+
+```{r}
+dades_netes %>%
+  group_by(year, pos) %>%
+  filter(!(pos %in% c("P", "C", ""))) %>%
+  mutate(h = h/ab, d = d/ab, t = t/ab, hr = hr/ab) %>%
+  summarise(h = mean(h, na.rm = TRUE),
+            d = mean(d, na.rm = TRUE),
+            t = mean(t, na.rm = TRUE),
+            hr = mean(hr, na.rm = TRUE)) %>%
+  drop_na() %>%
+  gather(hit, val, h, d, t, hr) %>%
+  ggplot() + 
+  geom_bar(mapping = aes(x = hit, y = val, fill = hit),
+           stat = "identity", position = "dodge") + 
+  facet_grid(pos ~ year) +
+  labs(title = "Evolution per position",
+       subtitle = paste("Variables: ", str_c(selected_vars[-1], 
+                                             collapse = ", ")),
+       x = "Type of hit", 
+       y = "Mean",
+       color = '')
+```
+
+Another way of seeing the evolution of each variable but perhaps more easily appreciated.
+
+```{r}
+player <- "Derek Jeter"
+selected_vars <- c("year", "h", "d", "t", "hr")
+
+p <- dades_netes %>%
+  filter(name_display_first_last == player) %>%
+  select(selected_vars, "ab") %>%
+  mutate(h = h/ab, d = d/ab, t = t/ab, hr = hr/ab)
+
+ggplot(p) + 
+  geom_smooth(mapping = aes(x = year, y = h)) + 
+  labs(title = paste("Evolution of ", player, sep = ""),
+       x = "Year", 
+       y = "Probability of hit",
+       color = '') +
+  geom_line(mapping = aes(x = year, y = h))
+
+ggplot(p) + 
+  geom_smooth(mapping = aes(x = year, y = d)) + 
+  labs(title = paste("Evolution of ", player, sep = ""),
+       x = "Year", 
+       y = "Probability of double",
+       color = '') +
+  geom_line(mapping = aes(x = year, y = d))
+
+ggplot(p) + 
+  geom_smooth(mapping = aes(x = year, y = t)) + 
+  labs(title = paste("Evolution of ", player, sep = ""),
+       x = "Year", 
+       y = "Probability of triple",
+       color = '') +
+  geom_line(mapping = aes(x = year, y = t))
+
+ggplot(p) + 
+  geom_smooth(mapping = aes(x = year, y = hr)) + 
+  labs(title = paste("Evolution of ", player, sep = ""),
+       x = "Year", 
+       y = "Probability of homerun",
+       color = '') +
+  geom_line(mapping = aes(x = year, y = hr))
+```
+
+The first attempt to find a variable directly related to winning the championship is the created variable `potential_points`. It calculated the probability of scoring points by one player. It is not a very good measure, as players often play to let others score, but we are doing in general very simple analysis. We compute the sum of potential points grouped by year and position and we present the data coloured by
+
+* winning or losing year,
+* the overall mean potential points of the year is positive or negative.
+
+```{r}
+dades_netes %>%
+  group_by(year, pos) %>%
+  select(1, year, win, potential_points) %>%
+  filter(!(pos %in% c("P", "C", ""))) %>%
+  drop_na() %>%
+  mutate(mean_pot_points = mean(potential_points)) %>%
+  ggplot() + 
+  geom_bar(mapping = aes(x = pos, 
+                         y = potential_points, fill = factor(win)),
+           stat = "identity", position = "dodge") + 
+  facet_grid(year ~ .) +
+  labs(title = "Potential points per position",
+       x = "",
+       y = "Potential points",
+       color = '') +
+  coord_flip()
+
+dades_netes %>%
+  group_by(year) %>%
+  select(1, year, pos, potential_points) %>%
+  filter(!(pos %in% c("P", "C", ""))) %>%
+  drop_na() %>%
+  mutate(mean_pot_points = mean(potential_points)) %>%
+  ggplot() + 
+  geom_bar(mapping = aes(x = pos, 
+                         y = potential_points, 
+                         fill = mean_pot_points > 0),
+           stat = "identity", position = "dodge") + 
+  facet_grid(year ~ .) +
+  labs(title = "Potential points per position",
+       x = "",
+       y = "Potential points",
+       color = '') +
+  coord_flip()
+```
+
+We do not see a very high correlation: this indicator tends to say that the possibility of winning is high. We see that they keep having a good average in the possibility of scoring, but they seem to keep losing. Maybe they perform well but lose important matches in the finals. Some other variables and effects (other teams, finals...) should be taken into account. We would have to check it better, but the only concluion that a priori could be brought to light is that if the overall mean is negative, it is possibly a bad year.
+
+If we inspect the actual year:
+
+```{r}
+dades_netes_18 %>%
+  group_by(year) %>%
+  select(1, year, pos, potential_points) %>%
+  filter(!(pos %in% c("P", "C", ""))) %>%
+  drop_na() %>%
+  mutate(mean_pot_points = mean(potential_points)) %>%
+  ggplot() + 
+  geom_bar(mapping = aes(x = pos, 
+                         y = potential_points, 
+                         fill = mean_pot_points > 0),
+           stat = "identity", position = "dodge") + 
+  facet_grid(year ~ .) +
+  labs(title = "Potential points per position",
+       x = "",
+       y = "Potential points",
+       color = '') +
+  coord_flip()
+```
+
+As said, this would be a bad indicator, although the season started very recently and possibly data is not as informative as could be.
+
+## Conlusions
+
+There are many problems in this study: not taking into account other teams, differences in games (away, home, pre and post all star)... What's more, it was only taken into account the individual performance in a very specific aspect of the game: the offensive part.
+
+It was not the principal objective of this study and the lack of time and previous knowledge impeeds performing a very good analysis. As always, every cloud has a silver linning and we can see that there is a lot of data available and a wide range of possibilities and statistical tools can be exploited in this area.
+
+The best part of it, and is actually the main objective, is that webs that have a JSON version of the data stored are very easily scraped and in particular with the `R` software, and the only remaining problem is to be able to work with the lists obtained to present the data at will.
